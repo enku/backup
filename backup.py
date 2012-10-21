@@ -33,6 +33,8 @@ def parse_args():
         description='Back up a server')
     parser.add_argument('-u', '--update', action='store_true', default=False,
                         help='Update last backup instead of creating a new one.')
+    parser.add_argument('-l', '--link', default=None,
+                        help='Create a symlink of this backup to LINK')
     parser.add_argument('hostname', type=str)
     return parser.parse_args()
 
@@ -68,8 +70,13 @@ def post_backup(hostname):
 
 def get_last_dir(dirname):
     """Return the last (sorted) directory in «dirname»"""
-    dirs = [i for i in os.listdir(
-        dirname) if os.path.isdir('%s/%s' % (dirname, i))]
+    dirs = []
+    for _dir in os.listdir(dirname):
+        fullpath = '%s/%s' % (dirname, _dir)
+        if (not os.path.isdir(fullpath)) or os.path.islink(fullpath):
+            continue
+        dirs.append(_dir)
+
     if not dirs:
         return None
     dirs.sort()
@@ -154,10 +161,15 @@ def main():
             sys.exit(status)
     post_backup(hostname)
     timestamp = get_timestamp()
+
     os.rename(
         '%s/%s/%s' % (BACKUP_VOL, hostname, target),
         '%s/%s/%s' % (BACKUP_VOL, hostname, timestamp)
     )
+
+    if args.link:
+        os.symlink(timestamp, '%s/%s/%s' % (BACKUP_VOL, hostname, args.link))
+
     print('done')
 
 
