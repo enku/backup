@@ -10,19 +10,26 @@ from subprocess import call
 import sys
 
 ENV = {'TZ': 'UTC'}
-SOURCE_VOL = '/mnt/gentoo'
 BACKUP_VOL = '/var/backup'
 RSYNC_ARGS = (
+    '--acls',
     '--archive',
     '--compress',
     '--human-readable',
+    '--numeric-ids',
     '--one-file-system',
+    '--quiet',
     '--sparse',
     '--stats',
+    '--xattrs',
     '-F',
 )
 
-DIRS = ('boot', 'root', 'gentoo')
+RSYNC_STATUS = {
+    0: 'Success',
+    23: 'Partial transfer due to error',
+    24: 'Partial transfer due to vanished source files',
+}
 
 os.environ['TZ'] = 'UTC'
 
@@ -39,33 +46,123 @@ def parse_args():
     return parser.parse_args()
 
 
-def ssh(hostname, cmd):
-    """Like subprocess.Popen: Execute cmd but using ssh on «hostname»"""
-    new_cmd = ['ssh', hostname, ' '.join(cmd)]
-    status = call(new_cmd)
-    return status
+class BackupClient(object):
+    def __init__(self, hostname):
+        self.hostname = hostname
+        self.host_dir = '%s/%s' % (BACKUP_VOL, hostname)
+        self.filesystems = self.get_filesystems()
+        self.backup_vol = '/mnt/backup'
 
+        if not os.path.isdir(self.host_dir):
+            os.mkdir(self.host_dir)
 
-def pre_backup(hostname):
-    status = ssh(hostname, ('mountpoint', '-q', '/boot'))
-    if status != 0:
-        ssh(hostname, ('mount', '/boot'))
-    status = ssh(
-        hostname, ('mount', '--bind', '/boot', '%s/boot' % SOURCE_VOL))
-    if status != 0:
-        sys.exit(status)
-    status = ssh(hostname, ('mountpoint', '-q', '%s/root' % SOURCE_VOL))
-    if status != 0:
-        status = ssh(
-            hostname, ('mount', '--bind', '/', '%s/root' % SOURCE_VOL))
-    if status != 0:
-        sys.exit(status)
+    def get_filesystems(self):
+        filesystems = []
+        filename = '%s/filesystems' % self.host_dir
+        fp = open(filename)
+        for line in fp:
+            line = line.strip()
+            if not line or line.startswith('#'):
+                continue
+            filesystems.append(line)
+        return filesystems
 
+    def ssh(self, cmd):
+        """Like subprocess.Popen: Execute cmd but using ssh on the client."""
+        new_cmd = ['ssh', self.hostname, ' '.join(cmd)]
+        status = call(new_cmd)
+        return status
 
-def post_backup(hostname):
-    ssh(hostname, ('umount', '%s/boot' % SOURCE_VOL))
-    ssh(hostname, ('umount', '%s/root' % SOURCE_VOL))
-    ssh(hostname, ('umount', '/boot'))
+    def pre_backup(self):
+        return
+
+    def backup(self, update=False, link_to=None):
+        last_dir = get_last_dir(self.host_dir)
+
+        if update:
+            if not last_dir:
+                sys.stderr.write(
+                    '--update specified, but no directory to update from.\n')
+                sys.exit(1)
+            target = last_dir
+        else:
+            target = '0'
+            full_target = '%s/%s/%s' % (BACKUP_VOL, self.hostname, target)
+            if os.path.isdir(full_target):
+                sys.stderr.write('%s already exists.  Abort.\n' % target)
+                sys.exit(1)
+            os.mkdir(full_target)
+
+        for _dir in self.filesystems:
+            status = self.ssh(('mount', '--bind', _dir, self.backup_vol))
+            if status != 0:
+                sys.exit(status)
+
+            dirname = os.path.basename(_dir)
+            if dirname == '':
+                dirname = 'root'
+
+            target_path = os.path.join(BACKUP_VOL, self.hostname, target, dirname)
+
+            if not target_path.startswith(BACKUP_VOL):
+                sys.stderr.write(
+                    'Refusing to backup outside of {0}: {1}\n'.format(
+                        BACKUP_VOL, target_path))
+                self.post_backup()
+                sys.exit(1)
+
+            if last_dir:
+                link_dest_path = os.path.join(BACKUP_VOL,
+                                              self.hostname,
+                                              last_dir,
+                                              dirname)
+            print()
+            print(dirname)
+            if update:
+                status = print_time(call, ('rsync',) + RSYNC_ARGS +
+                                    ('--del',
+                                    '--link-dest=%s' % link_dest_path,
+                                    '%s:%s/' % (self.hostname, self.backup_vol),
+                                    '%s/' % target_path
+                                     ))
+            elif not last_dir:
+                status = print_time(call, ('rsync',) + RSYNC_ARGS +
+                                    ('%s:%s/' % (self.hostname, self.backup_vol),
+                                    '%s/' % target_path
+                                     ))
+            else:
+                status = print_time(call, ('rsync',) + RSYNC_ARGS +
+                                    (
+                                    '--link-dest=%s' % link_dest_path,
+                                    '%s:%s/' % (self.hostname, self.backup_vol),
+                                    '%s/' % target_path
+                                    ))
+            self.ssh(('umount', self.backup_vol))
+            try:
+                print(RSYNC_STATUS[status])
+            except KeyError:
+                self.post_backup()
+                sys.exit(status)
+
+        timestamp = get_timestamp()
+
+        os.rename(
+            '%s/%s/%s' % (BACKUP_VOL, self.hostname, target),
+            '%s/%s/%s' % (BACKUP_VOL, self.hostname, timestamp)
+        )
+
+        if link_to:
+            os.symlink(timestamp, '%s/%s/%s' % (BACKUP_VOL, self.hostname, link_to))
+
+        latest_link = '{backup_vol}/{hostname}/latest'.format(
+            backup_vol=BACKUP_VOL, hostname=self.hostname)
+
+        if os.path.exists(latest_link) or os.path.islink(latest_link):
+            os.unlink(latest_link)
+        os.symlink(timestamp, latest_link)
+
+    def post_backup(self):
+        return
 
 
 def get_last_dir(dirname):
@@ -107,68 +204,11 @@ def main():
     """Main program entry point."""
     args = parse_args()
     hostname = args.hostname
-    hostdir = os.path.join(BACKUP_VOL, hostname)
 
-    if not os.path.isdir(hostdir):
-        os.mkdir(hostdir)
-
-    last_dir = get_last_dir(hostdir)
-
-    pre_backup(hostname)
-    if args.update:
-        if not last_dir:
-            sys.stderr.write(
-                '--update specified, but no directory to update from.\n')
-            sys.exit(1)
-        target = last_dir
-    else:
-        target = '0'
-        full_target = '%s/%s/%s' % (BACKUP_VOL, hostname, target)
-        if os.path.isdir(full_target):
-            sys.stderr.write('%s already exists.  Abort.\n' % target)
-            sys.exit(1)
-        os.mkdir(full_target)
-
-    for _dir in DIRS:
-        source_path = os.path.join(SOURCE_VOL, _dir)
-        target_path = os.path.join(BACKUP_VOL, hostname, target, _dir)
-        if last_dir:
-            link_dest_path = os.path.join(BACKUP_VOL, hostname, last_dir, _dir)
-
-        print()
-        print(_dir)
-        if args.update:
-            status = print_time(call, ('rsync',) + RSYNC_ARGS +
-                                ('--del',
-                                 '--link-dest=%s' % link_dest_path,
-                                 '%s:%s/' % (hostname, source_path),
-                                 '%s/' % target_path
-                                 ))
-        elif not last_dir:
-            status = print_time(call, ('rsync',) + RSYNC_ARGS +
-                                ('%s:%s/' % (hostname, source_path),
-                                 '%s/' % target_path
-                                 ))
-        else:
-            status = print_time(call, ('rsync',) + RSYNC_ARGS +
-                                (
-                                '--link-dest=%s' % link_dest_path,
-                                '%s:%s/' % (hostname, source_path),
-                                '%s/' % target_path
-                                ))
-
-        if status != 0:
-            sys.exit(status)
-    post_backup(hostname)
-    timestamp = get_timestamp()
-
-    os.rename(
-        '%s/%s/%s' % (BACKUP_VOL, hostname, target),
-        '%s/%s/%s' % (BACKUP_VOL, hostname, timestamp)
-    )
-
-    if args.link:
-        os.symlink(timestamp, '%s/%s/%s' % (BACKUP_VOL, hostname, args.link))
+    client = BackupClient(hostname)
+    client.pre_backup()
+    client.backup(args.update, args.link)
+    client.post_backup()
 
     print('done')
 
