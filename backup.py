@@ -122,18 +122,21 @@ class BackupClient(object):
                 status = print_time(call, ('rsync',) + RSYNC_ARGS +
                                     ('--del',
                                     '--link-dest=%s' % link_dest_path,
+                                     '--',
                                     '%s:%s/' % (self.hostname, self.backup_vol),
                                     '%s/' % target_path
                                      ))
             elif not last_dir:
                 status = print_time(call, ('rsync',) + RSYNC_ARGS +
-                                    ('%s:%s/' % (self.hostname, self.backup_vol),
+                                    ('--',
+                                     '%s:%s/' % (self.hostname, self.backup_vol),
                                     '%s/' % target_path
                                      ))
             else:
                 status = print_time(call, ('rsync',) + RSYNC_ARGS +
                                     (
                                     '--link-dest=%s' % link_dest_path,
+                                    '--',
                                     '%s:%s/' % (self.hostname, self.backup_vol),
                                     '%s/' % target_path
                                     ))
