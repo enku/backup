@@ -42,7 +42,7 @@ def parse_args():
                         help='Update last backup instead of creating a new one.')
     parser.add_argument('-l', '--link', default=None,
                         help='Create a symlink of this backup to LINK')
-    parser.add_argument('hostname', type=str)
+    parser.add_argument('host', type=str, nargs='+')
     return parser.parse_args()
 
 
@@ -117,7 +117,7 @@ class BackupClient(object):
                                               last_dir,
                                               dirname)
             print()
-            print(dirname)
+            print('{}:{}'.format(self.hostname, dirname))
             if update:
                 status = print_time(call, ('rsync',) + RSYNC_ARGS +
                                     ('--del',
@@ -206,12 +206,16 @@ def get_timestamp(time=None):
 def main():
     """Main program entry point."""
     args = parse_args()
-    hostname = args.hostname
+    hosts = args.host
 
-    client = BackupClient(hostname)
-    client.pre_backup()
-    client.backup(args.update, args.link)
-    client.post_backup()
+    for hostname in hosts:
+        try:
+            client = BackupClient(hostname)
+            client.pre_backup()
+            client.backup(args.update, args.link)
+            client.post_backup()
+        except Exception:
+            break
 
     print('done')
 
