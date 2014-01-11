@@ -1,12 +1,18 @@
-#!/usr/bin/env python3
+#!/usr/bin/python3
 # -*- encoding: utf-8 -*-
 """
 Backups, revisited
 """
+# we don't need this but it shuts up vim/pylint
+from __future__ import print_function
+
 import argparse
+import concurrent.futures
 import datetime
 import os
-from subprocess import call
+from subprocess import call, Popen, PIPE
+import threading
+import queue
 import sys
 
 ENV = {'TZ': 'UTC'}
@@ -31,27 +37,62 @@ RSYNC_STATUS = {
     24: 'Partial transfer due to vanished source files',
 }
 
+ESC = '\x1b['
+NORMAL = ESC + '00m'
+FAIL = ESC + '01;31m' + 'F' + NORMAL
+RUNNNG = ESC + '01;34m' + 'R' + NORMAL
+COMPLETE = ESC + '01;32m' + 'C' + NORMAL
+WAITING = ESC + '01;36m' + 'W' + NORMAL
+
 os.environ['TZ'] = 'UTC'
+format = str.format
+
+
+class OutputThread(threading.Thread):
+    queue = queue.Queue()
+    daemon = True
+
+    def run(self):
+        while True:
+            args, kwargs = self.queue.get()
+            sprint(*args, **kwargs)
+            self.queue.task_done()
+
+    def print(self, *args, **kwargs):
+        self.queue.put((args, kwargs))
 
 
 def parse_args():
     """Return the cmdline arguments parsed (or fail)."""
-    parser = argparse.ArgumentParser(
-        description='Back up a server')
+    parser = argparse.ArgumentParser(description='Back up a system')
     parser.add_argument('-u', '--update', action='store_true', default=False,
-                        help='Update last backup instead of creating a new one.')
+                        help='Update last backup instead of creating a new '
+                        'one.')
     parser.add_argument('-l', '--link', default=None,
                         help='Create a symlink of this backup to LINK')
+    parser.add_argument('-j', '--jobs', type=int, default=3,
+                        help='Number of parallel jobs')
     parser.add_argument('host', type=str, nargs='+')
     return parser.parse_args()
 
 
+def sprint(*args, **kwargs):
+    """
+    Print and flush stdout.
+    """
+    print(*args, **kwargs)
+    sys.stdout.flush()
+
+
 class BackupClient(object):
+
     def __init__(self, hostname):
         self.hostname = hostname
         self.host_dir = '%s/%s' % (BACKUP_VOL, hostname)
         self.filesystems = self.get_filesystems()
-        self.backup_vol = '/mnt/backup'
+        self.stats = dict([(i, WAITING) for i in self.filesystems])
+        self.output = OutputThread()
+        self.output.start()
 
         if not os.path.isdir(self.host_dir):
             os.mkdir(self.host_dir)
@@ -74,11 +115,93 @@ class BackupClient(object):
         return status
 
     def pre_backup(self):
-        return
+        popen = Popen(
+            ('ssh', self.hostname, 'mktemp', '-d', '--suffix=.backup'),
+            stdout=PIPE
+        )
+        self.backup_vol = popen.stdout.read().rstrip().decode('utf-8')
+        return popen.wait()
 
-    def backup(self, update=False, link_to=None):
+    def backup_filesystem(self, filesystem, target, last_dir, update):
+        self.print_stats((filesystem, RUNNNG))
+        dirname = os.path.basename(filesystem) or 'root'
+        bind_mount = os.path.join(self.backup_vol, dirname)
+
+        self.ssh(('mkdir', '-p', bind_mount))
+        status = self.ssh(('mount', '--bind', filesystem, bind_mount))
+        if status != 0:
+            sys.exit(status)
+
+        target_path = os.path.join(BACKUP_VOL, self.hostname, target, dirname)
+
+        if not target_path.startswith(BACKUP_VOL):
+            sys.stderr.write(format('Refusing to backup outside of {0}: {1}\n',
+                             BACKUP_VOL, target_path))
+            self.ssh(('rmdir', bind_mount))
+            sys.exit(1)
+
+        if last_dir:
+            link_dest_path = os.path.join(
+                BACKUP_VOL, self.hostname, last_dir, dirname)
+
+        args = ['rsync']
+        args.extend(RSYNC_ARGS)
+        if update:
+            args.append('--del')
+        if last_dir:
+            args.append('--link-dest=%s' % link_dest_path)
+
+        args.append('--')
+        args.append('%s:%s/' % (self.hostname, bind_mount))
+        args.append('%s/' % target_path)
+        status = call(args)
+        self.ssh(('umount', bind_mount))
+        self.ssh(('rmdir', bind_mount))
+
+        self.print_stats((filesystem, COMPLETE if status == 0 else FAIL))
+        sys.exit(status)
+
+    def backup(self, update=False, link_to=None, jobs=3):
         last_dir = get_last_dir(self.host_dir)
+        target = self.get_target(update, last_dir)
+        futures = []
 
+        with concurrent.futures.ThreadPoolExecutor(
+                max_workers=jobs) as executor:
+            self.output.print('')
+            for _dir in self.filesystems:
+                futures.append(executor.submit(self.backup_filesystem, _dir,
+                                               target, last_dir, update))
+            concurrent.futures.wait(futures)
+
+        timestamp = get_timestamp()
+        self.output.print('')
+
+        os.rename('%s/%s/%s' % (BACKUP_VOL, self.hostname, target),
+                  '%s/%s/%s' % (BACKUP_VOL, self.hostname, timestamp))
+
+        if link_to:
+            os.symlink(timestamp, '%s/%s/%s' % (BACKUP_VOL, self.hostname,
+                                                link_to))
+
+        latest_link = format('{backup_vol}/{hostname}/latest',
+                             backup_vol=BACKUP_VOL, hostname=self.hostname)
+
+        if os.path.exists(latest_link) or os.path.islink(latest_link):
+            os.unlink(latest_link)
+        os.symlink(timestamp, latest_link)
+
+    def get_target(self, update, last_dir):
+        """
+        Return (and create if neccessary) the rsync target based on the
+        options. exit() and print message to stderr if there are issues.
+
+        update: bool: whether this is an "update" backup.
+
+        last_dir: str: The directory of the previous backup or None.
+            If update == True, then last_dir must not be None
+
+        """
         if update:
             if not last_dir:
                 sys.stderr.write(
@@ -93,79 +216,19 @@ class BackupClient(object):
                 sys.exit(1)
             os.mkdir(full_target)
 
-        for _dir in self.filesystems:
-            status = self.ssh(('mount', '--bind', _dir, self.backup_vol))
-            if status != 0:
-                sys.exit(status)
+        return target
 
-            dirname = os.path.basename(_dir)
-            if dirname == '':
-                dirname = 'root'
-
-            target_path = os.path.join(BACKUP_VOL, self.hostname, target, dirname)
-
-            if not target_path.startswith(BACKUP_VOL):
-                sys.stderr.write(
-                    'Refusing to backup outside of {0}: {1}\n'.format(
-                        BACKUP_VOL, target_path))
-                self.post_backup()
-                sys.exit(1)
-
-            if last_dir:
-                link_dest_path = os.path.join(BACKUP_VOL,
-                                              self.hostname,
-                                              last_dir,
-                                              dirname)
-            print()
-            print('{}:{}'.format(self.hostname, dirname))
-            if update:
-                status = print_time(call, ('rsync',) + RSYNC_ARGS +
-                                    ('--del',
-                                    '--link-dest=%s' % link_dest_path,
-                                     '--',
-                                    '%s:%s/' % (self.hostname, self.backup_vol),
-                                    '%s/' % target_path
-                                     ))
-            elif not last_dir:
-                status = print_time(call, ('rsync',) + RSYNC_ARGS +
-                                    ('--',
-                                     '%s:%s/' % (self.hostname, self.backup_vol),
-                                    '%s/' % target_path
-                                     ))
-            else:
-                status = print_time(call, ('rsync',) + RSYNC_ARGS +
-                                    (
-                                    '--link-dest=%s' % link_dest_path,
-                                    '--',
-                                    '%s:%s/' % (self.hostname, self.backup_vol),
-                                    '%s/' % target_path
-                                    ))
-            self.ssh(('umount', self.backup_vol))
-            try:
-                print(RSYNC_STATUS[status])
-            except KeyError:
-                self.post_backup()
-                sys.exit(status)
-
-        timestamp = get_timestamp()
-
-        os.rename(
-            '%s/%s/%s' % (BACKUP_VOL, self.hostname, target),
-            '%s/%s/%s' % (BACKUP_VOL, self.hostname, timestamp)
-        )
-
-        if link_to:
-            os.symlink(timestamp, '%s/%s/%s' % (BACKUP_VOL, self.hostname, link_to))
-
-        latest_link = '{backup_vol}/{hostname}/latest'.format(
-            backup_vol=BACKUP_VOL, hostname=self.hostname)
-
-        if os.path.exists(latest_link) or os.path.islink(latest_link):
-            os.unlink(latest_link)
-        os.symlink(timestamp, latest_link)
+    def print_stats(self, update=None):
+        if update:
+            self.stats[update[0]] = update[1]
+        self.output.print('\r', end='')
+        for filesystem in self.filesystems:
+            self.output.print(
+                format('{0}:{1}', os.path.basename(filesystem) or 'root',
+                       self.stats[filesystem]), end=' ')
 
     def post_backup(self):
-        return
+        return self.ssh(('rmdir', self.backup_vol))
 
 
 def get_last_dir(dirname):
@@ -183,20 +246,6 @@ def get_last_dir(dirname):
     return dirs[-1]
 
 
-def print_time(func, *args, **kwargs):
-    """execute func(*args, **kwargs) and return the time it took to run.
-
-    returns the return value of func().
-    """
-    if func is call:
-        print(' '.join(args[0]))
-    start = datetime.datetime.now()
-    status = func(*args, **kwargs)
-    stop = datetime.datetime.now()
-    print(stop - start)
-    return status
-
-
 def get_timestamp(time=None):
     if not time:
         time = datetime.datetime.now()
@@ -212,7 +261,7 @@ def main():
         try:
             client = BackupClient(hostname)
             client.pre_backup()
-            client.backup(args.update, args.link)
+            client.backup(args.update, args.link, args.jobs)
             client.post_backup()
         except Exception:
             break
