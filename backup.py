@@ -44,7 +44,6 @@ COMPLETE = "\U0001F315"
 WAITING = "\U0001F311"
 
 os.environ["TZ"] = "UTC"
-format = str.format
 
 
 class OutputThread(threading.Thread):
@@ -110,7 +109,7 @@ class BackupClient(object):
 
     def get_filesystems(self):
         filesystems = []
-        filename = "%s/filesystems" % self.host_dir
+        filename = f"{self.host_dir}/filesystems"
         fp = open(filename)
         for line in fp:
             line = line.strip()
@@ -155,9 +154,7 @@ class BackupClient(object):
 
         if not target_path.startswith(self.volume):
             sys.stderr.write(
-                format(
-                    "Refusing to backup outside of {0}: {1}\n", self.volume, target_path
-                )
+                f"Refusing to backup outside of {self.volume}: {target_path}\n"
             )
             self.ssh(("rmdir", bind_mount))
             sys.exit(1)
@@ -170,11 +167,11 @@ class BackupClient(object):
         if update:
             args.append("--del")
         if last_dir:
-            args.append("--link-dest=%s" % link_dest_path)
+            args.append(f"--link-dest={link_dest_path}")
 
         args.append("--")
-        args.append("%s:%s/" % (self.hostname, bind_mount))
-        args.append("%s/" % target_path)
+        args.append(f"{self.hostname}:{bind_mount}/")
+        args.append(f"{target_path}/")
         status = call(args)
         self.ssh(("umount", bind_mount))
         self.ssh(("rmdir", bind_mount))
@@ -201,18 +198,14 @@ class BackupClient(object):
         self.output.print("")
 
         os.rename(
-            "%s/%s/%s" % (self.volume, self.hostname, target),
-            "%s/%s/%s" % (self.volume, self.hostname, timestamp),
+            f"{self.volume}/{self.hostname}/{target}",
+            f"{self.volume}/{self.hostname}/{timestamp}",
         )
 
         if link_to:
-            os.symlink(timestamp, "%s/%s/%s" % (self.volume, self.hostname, link_to))
+            os.symlink(timestamp, f"{self.hostname}/{self.hostname}/{link_to}")
 
-        latest_link = format(
-            "{backup_vol}/{hostname}/latest",
-            backup_vol=self.volume,
-            hostname=self.hostname,
-        )
+        latest_link = f"{self.volume}/{self.hostname}"
 
         if os.path.exists(latest_link) or os.path.islink(latest_link):
             os.unlink(latest_link)
@@ -238,9 +231,9 @@ class BackupClient(object):
             target = last_dir
         else:
             target = "0"
-            full_target = "%s/%s/%s" % (self.volume, self.hostname, target)
+            full_target = f"{self.volume}/{self.hostname}/{target}"
             if os.path.isdir(full_target):
-                sys.stderr.write("%s already exists.  Abort.\n" % target)
+                sys.stderr.write(f"{target} already exists. Abort.\n")
                 sys.exit(1)
             os.mkdir(full_target)
 
@@ -262,7 +255,7 @@ def get_last_dir(dirname):
     """Return the last (sorted) directory in «dirname»"""
     dirs = []
     for _dir in os.listdir(dirname):
-        fullpath = "%s/%s" % (dirname, _dir)
+        fullpath = f"{dirname}/{_dir}"
         if (not os.path.isdir(fullpath)) or os.path.islink(fullpath):
             continue
         dirs.append(_dir)
