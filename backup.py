@@ -13,6 +13,7 @@ import os
 import queue
 import sys
 import threading
+from random import shuffle
 from subprocess import PIPE, Popen, call
 from typing import Tuple
 
@@ -81,6 +82,13 @@ def parse_args():
         "--volume",
         default=BACKUP_VOL,
         help=f"Backup volume (default: f{BACKUP_VOL})",
+    )
+    parser.add_argument(
+        "-r",
+        "--random",
+        action="store_true",
+        default=False,
+        help="Backup host's filesystems in random order",
     )
     parser.add_argument("host", type=str, nargs="+")
     return parser.parse_args()
@@ -179,14 +187,18 @@ class BackupClient(object):
         self.print_stats((filesystem, COMPLETE if status == 0 else FAIL))
         sys.exit(status)
 
-    def backup(self, update=False, link_to=None, jobs=3):
+    def backup(self, update=False, link_to=None, jobs=3, random=False):
         last_dir = get_last_dir(self.host_dir)
         target = self.get_target(update, last_dir)
         futures = []
+        filesystems = self.filesystems[:]
+
+        if random:
+            shuffle(filesystems)
 
         with concurrent.futures.ThreadPoolExecutor(max_workers=jobs) as executor:
             self.output.print("")
-            for _dir in self.filesystems:
+            for _dir in filesystems:
                 futures.append(
                     executor.submit(
                         self.backup_filesystem, _dir, target, last_dir, update
@@ -240,10 +252,13 @@ class BackupClient(object):
         return target
 
     def print_stats(self, update=None):
+        filesystems = self.filesystems[:]
+        filesystems.sort(key=lambda i: self.parse_path(i)[1])
+
         if update:
             self.stats[update[0]] = update[1]
         self.output.print("\r", end="")
-        for filesystem in self.filesystems:
+        for filesystem in filesystems:
             dirname = self.parse_path(filesystem)[1]
             self.output.print(f"{dirname}:{self.stats[filesystem]}", end=" ")
 
@@ -281,7 +296,12 @@ def main():
         try:
             client = BackupClient(hostname, args.volume)
             client.pre_backup()
-            client.backup(args.update, args.link, args.jobs)
+            client.backup(
+                jobs=args.jobs,
+                link_to=args.link,
+                random=args.random,
+                update=args.update,
+            )
             client.post_backup()
         except Exception:
             break
