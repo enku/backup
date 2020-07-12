@@ -10,10 +10,11 @@ import argparse
 import concurrent.futures
 import datetime
 import os
-from subprocess import call, Popen, PIPE
-import threading
 import queue
 import sys
+import threading
+from subprocess import PIPE, Popen, call
+from typing import Tuple
 
 ENV = {"TZ": "UTC"}
 BACKUP_VOL = "/var/backup"
@@ -133,13 +134,22 @@ class BackupClient(object):
         self.backup_vol = popen.stdout.read().rstrip().decode("utf-8")
         return popen.wait()
 
+    @staticmethod
+    def parse_path(filesystem: str) -> Tuple[str, str]:
+        """Given the `filesystem` entry returnthe path and backup "label"""
+        parts = filesystem.partition(":")
+        path = parts[0]
+        label = os.path.basename(parts[2] if parts[2] else path) or "root"
+
+        return path.strip(), label.strip()
+
     def backup_filesystem(self, filesystem, target, last_dir, update):
         self.print_stats((filesystem, RUNNING))
-        dirname = os.path.basename(filesystem) or "root"
+        source, dirname = self.parse_path(filesystem)
         bind_mount = os.path.join(self.backup_vol, dirname)
 
         self.ssh(("mkdir", "-p", bind_mount))
-        status = self.ssh(("mount", "--bind", filesystem, bind_mount))
+        status = self.ssh(("mount", "--bind", source, bind_mount))
         if status != 0:
             sys.exit(status)
 
@@ -243,14 +253,8 @@ class BackupClient(object):
             self.stats[update[0]] = update[1]
         self.output.print("\r", end="")
         for filesystem in self.filesystems:
-            self.output.print(
-                format(
-                    "{0}:{1}",
-                    os.path.basename(filesystem) or "root",
-                    self.stats[filesystem],
-                ),
-                end=" ",
-            )
+            dirname = self.parse_path(filesystem)[1]
+            self.output.print(f"{dirname}:{self.stats[filesystem]}", end=" ")
 
     def post_backup(self):
         return self.ssh(("rmdir", self.backup_vol))
