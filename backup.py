@@ -78,6 +78,12 @@ def parse_args():
     parser.add_argument(
         "-j", "--jobs", type=int, default=1, help="Number of parallel jobs"
     )
+    parser.add_argument(
+        "-v",
+        "--volume",
+        default=BACKUP_VOL,
+        help=f"Backup volume (default: f{BACKUP_VOL})",
+    )
     parser.add_argument("host", type=str, nargs="+")
     return parser.parse_args()
 
@@ -91,9 +97,10 @@ def sprint(*args, **kwargs):
 
 
 class BackupClient(object):
-    def __init__(self, hostname):
+    def __init__(self, hostname, volume):
         self.hostname = hostname
-        self.host_dir = "%s/%s" % (BACKUP_VOL, hostname)
+        self.volume = os.path.realpath(volume)
+        self.host_dir = f"{volume}/{hostname}"
         self.filesystems = self.get_filesystems()
         self.stats = dict([(i, WAITING) for i in self.filesystems])
         self.output = OutputThread()
@@ -136,19 +143,19 @@ class BackupClient(object):
         if status != 0:
             sys.exit(status)
 
-        target_path = os.path.join(BACKUP_VOL, self.hostname, target, dirname)
+        target_path = os.path.join(self.volume, self.hostname, target, dirname)
 
-        if not target_path.startswith(BACKUP_VOL):
+        if not target_path.startswith(self.volume):
             sys.stderr.write(
                 format(
-                    "Refusing to backup outside of {0}: {1}\n", BACKUP_VOL, target_path
+                    "Refusing to backup outside of {0}: {1}\n", self.volume, target_path
                 )
             )
             self.ssh(("rmdir", bind_mount))
             sys.exit(1)
 
         if last_dir:
-            link_dest_path = os.path.join(BACKUP_VOL, self.hostname, last_dir, dirname)
+            link_dest_path = os.path.join(self.volume, self.hostname, last_dir, dirname)
 
         args = ["rsync"]
         args.extend(RSYNC_ARGS)
@@ -186,16 +193,16 @@ class BackupClient(object):
         self.output.print("")
 
         os.rename(
-            "%s/%s/%s" % (BACKUP_VOL, self.hostname, target),
-            "%s/%s/%s" % (BACKUP_VOL, self.hostname, timestamp),
+            "%s/%s/%s" % (self.volume, self.hostname, target),
+            "%s/%s/%s" % (self.volume, self.hostname, timestamp),
         )
 
         if link_to:
-            os.symlink(timestamp, "%s/%s/%s" % (BACKUP_VOL, self.hostname, link_to))
+            os.symlink(timestamp, "%s/%s/%s" % (self.volume, self.hostname, link_to))
 
         latest_link = format(
             "{backup_vol}/{hostname}/latest",
-            backup_vol=BACKUP_VOL,
+            backup_vol=self.volume,
             hostname=self.hostname,
         )
 
@@ -223,7 +230,7 @@ class BackupClient(object):
             target = last_dir
         else:
             target = "0"
-            full_target = "%s/%s/%s" % (BACKUP_VOL, self.hostname, target)
+            full_target = "%s/%s/%s" % (self.volume, self.hostname, target)
             if os.path.isdir(full_target):
                 sys.stderr.write("%s already exists.  Abort.\n" % target)
                 sys.exit(1)
@@ -277,7 +284,7 @@ def main():
 
     for hostname in hosts:
         try:
-            client = BackupClient(hostname)
+            client = BackupClient(hostname, args.volume)
             client.pre_backup()
             client.backup(args.update, args.link, args.jobs)
             client.post_backup()
