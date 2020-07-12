@@ -76,7 +76,7 @@ def parse_args():
         "-l", "--link", default=None, help="Create a symlink of this backup to LINK"
     )
     parser.add_argument(
-        "-j", "--jobs", type=int, default=3, help="Number of parallel jobs"
+        "-j", "--jobs", type=int, default=1, help="Number of parallel jobs"
     )
     parser.add_argument("host", type=str, nargs="+")
     return parser.parse_args()
