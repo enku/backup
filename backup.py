@@ -38,12 +38,10 @@ RSYNC_STATUS = {
     24: "Partial transfer due to vanished source files",
 }
 
-ESC = "\x1b["
-NORMAL = ESC + "00m"
-FAIL = ESC + "01;31m" + "F" + NORMAL
-RUNNING = ESC + "01;34m" + "R" + NORMAL
-COMPLETE = ESC + "01;32m" + "C" + NORMAL
-WAITING = ESC + "01;36m" + "W" + NORMAL
+FAIL = "\U000026C5"
+RUNNING = "\U0001F317"
+COMPLETE = "\U0001F315"
+WAITING = "\U0001F311"
 
 os.environ["TZ"] = "UTC"
 format = str.format
