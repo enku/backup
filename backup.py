@@ -40,7 +40,7 @@ RSYNC_STATUS = {
 ESC = "\x1b["
 NORMAL = ESC + "00m"
 FAIL = ESC + "01;31m" + "F" + NORMAL
-RUNNNG = ESC + "01;34m" + "R" + NORMAL
+RUNNING = ESC + "01;34m" + "R" + NORMAL
 COMPLETE = ESC + "01;32m" + "C" + NORMAL
 WAITING = ESC + "01;36m" + "W" + NORMAL
 
@@ -134,7 +134,7 @@ class BackupClient(object):
         return popen.wait()
 
     def backup_filesystem(self, filesystem, target, last_dir, update):
-        self.print_stats((filesystem, RUNNNG))
+        self.print_stats((filesystem, RUNNING))
         dirname = os.path.basename(filesystem) or "root"
         bind_mount = os.path.join(self.backup_vol, dirname)
 
