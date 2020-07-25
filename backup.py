@@ -3,9 +3,6 @@
 """
 Backups, revisited
 """
-# we don't need this but it shuts up vim/pylint
-from __future__ import print_function
-
 import argparse
 import concurrent.futures
 import datetime
