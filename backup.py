@@ -214,7 +214,7 @@ class BackupClient(object):
         if link_to:
             os.symlink(timestamp, f"{self.hostname}/{self.hostname}/{link_to}")
 
-        latest_link = f"{self.volume}/{self.hostname}"
+        latest_link = f"{self.volume}/{self.hostname}/latest"
 
         if os.path.exists(latest_link) or os.path.islink(latest_link):
             os.unlink(latest_link)
