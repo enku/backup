@@ -115,9 +115,10 @@ class BackupClient:
     def __init__(self, hostname, volume):
         self.hostname = hostname
         self.volume = os.path.realpath(volume)
+        self.backup_vol = None
         self.host_dir = f"{volume}/{hostname}"
         self.filesystems = self.get_filesystems()
-        self.stats = dict([(i, WAITING) for i in self.filesystems])
+        self.stats = {i: WAITING for i in self.filesystems}
         self.output = OutputThread()
         self.output.start()
 
@@ -128,18 +129,18 @@ class BackupClient:
         """Return the list of host's filesystems to back up"""
         filesystems = []
         filename = f"{self.host_dir}/filesystems"
-        fp = open(filename)
-        for line in fp:
-            line = line.strip()
-            if not line or line.startswith("#"):
-                continue
-            filesystems.append(line)
+        with open(filename) as fs_file:
+            for line in fs_file:
+                line = line.strip()
+                if not line or line.startswith("#"):
+                    continue
+                filesystems.append(line)
         return filesystems
 
-    def ssh(self, cmd):
-        """Like subprocess.Popen: Execute cmd but using ssh on the client."""
-        new_cmd = ["ssh", self.hostname, " ".join(cmd)]
-        status = call(new_cmd)
+    def ssh(self, args):
+        """Like subprocess.Popen: Execute args but using ssh on the client."""
+        new_args = ["ssh", self.hostname, " ".join(args)]
+        status = call(new_args)
         return status
 
     def run_hook(self, name: str, *args: str) -> int:
@@ -333,11 +334,11 @@ class BackupClient:
         return status
 
 
-def get_last_dir(dirname):
-    """Return the last (sorted) directory in «dirname»"""
+def get_last_dir(dir_name):
+    """Return the last (sorted) directory in dir_name"""
     dirs = []
-    for _dir in os.listdir(dirname):
-        fullpath = f"{dirname}/{_dir}"
+    for _dir in os.listdir(dir_name):
+        fullpath = f"{dir_name}/{_dir}"
         if (not os.path.isdir(fullpath)) or os.path.islink(fullpath):
             continue
         dirs.append(_dir)

@@ -55,8 +55,8 @@ def dt_list_to_backups(dt_list):
     This does the exact opposite of backups_to_dt_list()
     """
     backups = []
-    for dt in dt_list:
-        backups.append(dt.strftime("%Y%m%d.%H%M"))
+    for _datetime in dt_list:
+        backups.append(_datetime.strftime("%Y%m%d.%H%M"))
     return backups
 
 
@@ -66,9 +66,9 @@ def filter_range(dt_list, start, end):
     and end (inclusive).
     """
     lst = []
-    for datetime_ in dt_list:
-        if start <= datetime_ <= end:
-            lst.append(datetime_)
+    for _datetime in dt_list:
+        if start <= _datetime <= end:
+            lst.append(_datetime)
     return lst
 
 
@@ -86,14 +86,14 @@ def append_latest(dt_list, lst):
     return None
 
 
-def last_day_of_month(dt):
+def last_day_of_month(_datetime):
     """
     Return the last day (hour minute and second) of the month of
     provided datetime object.
     """
-    year = dt.year
-    month = dt.month
-    next_month = dt.replace(
+    year = _datetime.year
+    month = _datetime.month
+    next_month = _datetime.replace(
         day=1,
         month=month + 1 if month < 12 else 1,
         year=year if month < 12 else year + 1,
@@ -111,9 +111,9 @@ def yesterday_plus(dt_list):
     today = datetime.datetime.now()
     yesterday = today - datetime.timedelta(hours=24)
     yesterday = yesterday.replace(hour=0, minute=0, second=0, microsecond=0)
-    for datetime_ in dt_list:
-        if datetime_ >= yesterday:
-            lst.append(datetime_)
+    for _datetime in dt_list:
+        if _datetime >= yesterday:
+            lst.append(_datetime)
     return lst
 
 
@@ -180,13 +180,15 @@ def one_per_month_last_year(dt_list):
     last_year = now - datetime.timedelta(days=365)
     last_year = last_year.replace(hour=0, minute=0, second=0, microsecond=0)
 
-    dt = last_year
-    while dt <= now:
-        start_of_month = dt.replace(month=dt.month, day=1, hour=0, minute=0, second=0)
+    _datetime = last_year
+    while _datetime <= now:
+        start_of_month = _datetime.replace(
+            month=_datetime.month, day=1, hour=0, minute=0, second=0
+        )
         end_of_month = last_day_of_month(start_of_month)
         months_dts = filter_range(dt_list, start_of_month, end_of_month)
         append_latest(months_dts, lst)
-        dt = end_of_month + datetime.timedelta(seconds=1)
+        _datetime = end_of_month + datetime.timedelta(seconds=1)
 
     return lst
 
@@ -200,10 +202,10 @@ def one_per_year(dt_list):
     lst = []
     years = []
     dt_revsort = sorted(dt_list, reverse=True)
-    for datetime_ in dt_revsort:
-        year = datetime_.year
+    for _datetime in dt_revsort:
+        year = _datetime.year
         if year not in years:
-            lst.append(datetime_)
+            lst.append(_datetime)
             years.append(year)
     return lst
 
@@ -235,8 +237,8 @@ def main():
         print("    {0}".format(backup))
 
     if to_remove:
-        ok = raw_input("\nOK? [y/N] ")
-        if ok.upper() == "Y":
+        confirm_removal = input("\nOK? [y/N] ")
+        if confirm_removal.upper() == "Y":
             remove_backups(backup_dir, dt_list_to_backups(to_remove))
         else:
             print("Fair enough.")
