@@ -106,8 +106,7 @@ def sprint(*args, **kwargs):
 def is_executable(path: str) -> bool:
     """Return True if `path` exists and is executable"""
     realpath = os.path.realpath(path)
-
-    return os.path.isfile(path) and os.access(path, os.X_OK)
+    return os.path.isfile(realpath) and os.access(realpath, os.X_OK)
 
 
 class BackupClient:
@@ -148,7 +147,7 @@ class BackupClient:
 
         Return the exit status or 0 if nothing ran
         """
-        hook = os.path.realpath(name)
+        hook = os.path.join(self.volume, name)
 
         if is_executable(hook):
             return call((hook,) + args)
