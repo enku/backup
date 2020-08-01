@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+"""Purge old backups for the given host from the backup volume"""
 import argparse
 import datetime
 import os
@@ -12,7 +13,7 @@ os.environ["TZ"] = "UTC"
 
 
 def parse_args():
-    """Return the cmdline arguments parsed (or fail)."""
+    """Return the command line arguments parsed (or fail)."""
     parser = argparse.ArgumentParser(description="Purge old backups")
     parser.add_argument(
         "-v",
@@ -28,16 +29,16 @@ def parse_args():
 def get_all_backups(backup_dir):
     """Return a list of all backup directories in backup_dir."""
     backups = []
-    files = os.listdir(backup_dir)
-    for f in files:
-        if BACKUP_REGEX.match(f):
-            backups.append(f)
+    filenames = os.listdir(backup_dir)
+    for filename in filenames:
+        if BACKUP_REGEX.match(filename):
+            backups.append(filename)
     return backups
 
 
 def backups_to_dt_list(backups):
     """
-    Given a list of strings in backup format, return the correspinding
+    Given a list of strings in backup format, return the corresponding
     list of datetime objects.
     """
     dates = []
@@ -51,7 +52,7 @@ def dt_list_to_backups(dt_list):
     """
     Given the list of datetimes, return a list of strings in backup format.
 
-    This does the exact opposit of backups_to_dt_list()
+    This does the exact opposite of backups_to_dt_list()
     """
     backups = []
     for dt in dt_list:
@@ -65,16 +66,16 @@ def filter_range(dt_list, start, end):
     and end (inclusive).
     """
     lst = []
-    for dt in dt_list:
-        if start <= dt <= end:
-            lst.append(dt)
+    for datetime_ in dt_list:
+        if start <= datetime_ <= end:
+            lst.append(datetime_)
     return lst
 
 
 def append_latest(dt_list, lst):
     """
-    If dt_list is a non-empty list of datetime objects, take the one with
-    the later datetime and append it to lst.  If lst is empty, do nothing.
+    If dt_list is a non-empty list of datetime objects, take the one with the later
+    datetime and append it to the list.  If the list is empty, do nothing.
 
     Return the datetime object appended or None.
     """
@@ -110,15 +111,15 @@ def yesterday_plus(dt_list):
     today = datetime.datetime.now()
     yesterday = today - datetime.timedelta(hours=24)
     yesterday = yesterday.replace(hour=0, minute=0, second=0, microsecond=0)
-    for dt in dt_list:
-        if dt >= yesterday:
-            lst.append(dt)
+    for datetime_ in dt_list:
+        if datetime_ >= yesterday:
+            lst.append(datetime_)
     return lst
 
 
 def one_per_day_last_week(dt_list):
     """
-    Given the list of datetime objects, return one dt for every day
+    Given the list of datetime objects, return one datetime for every day
     within the past week.
     """
     lst = []
@@ -199,15 +200,16 @@ def one_per_year(dt_list):
     lst = []
     years = []
     dt_revsort = sorted(dt_list, reverse=True)
-    for dt in dt_revsort:
-        year = dt.year
+    for datetime_ in dt_revsort:
+        year = datetime_.year
         if year not in years:
-            lst.append(dt)
+            lst.append(datetime_)
             years.append(year)
     return lst
 
 
 def main():
+    """Main program entry point"""
     args = parse_args()
     backup_dir = os.path.join(args.volume, args.host)
 
@@ -243,6 +245,7 @@ def main():
 
 
 def remove_backups(backup_dir, to_remove):
+    """Remove to_remove directories from backup_dir"""
     for backup in to_remove:
         dirname = os.path.join(backup_dir, backup)
         print("Removing {}".format(dirname), end=" ")

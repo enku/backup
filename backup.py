@@ -46,6 +46,8 @@ os.environ["TZ"] = "UTC"
 
 
 class OutputThread(threading.Thread):
+    """Thread responsible for Output from backup threads"""
+
     queue = queue.Queue()
     daemon = True
 
@@ -56,11 +58,12 @@ class OutputThread(threading.Thread):
             self.queue.task_done()
 
     def print(self, *args, **kwargs):
+        """Schedule content to be printed"""
         self.queue.put((args, kwargs))
 
 
 def parse_args():
-    """Return the cmdline arguments parsed (or fail)."""
+    """Return the command line arguments parsed (or fail)."""
     parser = argparse.ArgumentParser(description="Back up a system")
     parser.add_argument(
         "-u",
@@ -94,19 +97,22 @@ def parse_args():
 
 def sprint(*args, **kwargs):
     """
-    Print and flush stdout.
+    Print and flush standard out.
     """
     print(*args, **kwargs)
     sys.stdout.flush()
 
 
 def is_executable(path: str) -> bool:
+    """Return True if `path` exists and is executable"""
     realpath = os.path.realpath(path)
 
     return os.path.isfile(path) and os.access(path, os.X_OK)
 
 
-class BackupClient(object):
+class BackupClient:
+    """Backup client for a host/volume pair"""
+
     def __init__(self, hostname, volume):
         self.hostname = hostname
         self.volume = os.path.realpath(volume)
@@ -120,6 +126,7 @@ class BackupClient(object):
             os.mkdir(self.host_dir)
 
     def get_filesystems(self):
+        """Return the list of host's filesystems to back up"""
         filesystems = []
         filename = f"{self.host_dir}/filesystems"
         fp = open(filename)
@@ -149,6 +156,7 @@ class BackupClient(object):
         return 0
 
     def pre_backup(self):
+        """To be run before .backup()"""
         hook_status = self.run_hook("pre-host", self.hostname, self.volume)
 
         if hook_status != 0:
@@ -162,7 +170,7 @@ class BackupClient(object):
 
     @staticmethod
     def parse_path(filesystem: str) -> Tuple[str, str]:
-        """Given the `filesystem` entry returnthe path and backup "label"""
+        """Given the `filesystem` entry return the path and backup "label"""
         parts = filesystem.partition(":")
         path = parts[0]
         label = os.path.basename(parts[2] if parts[2] else path) or "root"
@@ -170,6 +178,12 @@ class BackupClient(object):
         return path.strip(), label.strip()
 
     def backup_filesystem(self, filesystem: str, target: str, last_dir, update: bool):
+        """Back up the specified filesystem to target
+
+        If last_dir is not None, use it as a --link-dest argument to rsync.
+
+        If update is True, update the last backup instead of creating a new one.
+        """
         hook_status = self.run_hook(
             "pre-filesystem",
             self.hostname,
@@ -233,6 +247,7 @@ class BackupClient(object):
         sys.exit(status)
 
     def backup(self, update=False, link_to=None, jobs=3, random=False):
+        """Back up the filesystems"""
         last_dir = get_last_dir(self.host_dir)
         target = self.get_target(update, last_dir)
         futures = []
@@ -269,12 +284,12 @@ class BackupClient(object):
 
     def get_target(self, update, last_dir):
         """
-        Return (and create if neccessary) the rsync target based on the
-        options. exit() and print message to stderr if there are issues.
+        Return (and create if necessary) the rsync target based on the
+        options. exit() and print message to standard error if there are issues.
 
-        update: bool: whether this is an "update" backup.
+        update: whether this is an "update" backup.
 
-        last_dir: str: The directory of the previous backup or None.
+        last_dir: The directory of the previous backup or None.
             If update == True, then last_dir must not be None
 
         """
@@ -296,6 +311,7 @@ class BackupClient(object):
         return target
 
     def print_stats(self, update=None):
+        """Prints the current status of the backup"""
         filesystems = self.filesystems[:]
         filesystems.sort(key=lambda i: self.parse_path(i)[1])
 
@@ -307,6 +323,7 @@ class BackupClient(object):
             self.output.print(f"{dirname}:{self.stats[filesystem]}", end=" ")
 
     def post_backup(self):
+        """To be run after .backup()"""
         status = self.ssh(("rmdir", self.backup_vol))
 
         hook_status = self.run_hook("post-host", self.hostname, self.volume)
@@ -333,6 +350,7 @@ def get_last_dir(dirname):
 
 
 def get_timestamp(time=None):
+    """Return the timestamp (directory name) for the given time"""
     if not time:
         time = datetime.datetime.now()
     return time.strftime("%Y%m%d.%H%M")
