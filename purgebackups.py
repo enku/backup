@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+import argparse
 import datetime
 import os
 import re
@@ -8,6 +9,20 @@ import sys
 BACKUP_VOL = "/var/backup"
 BACKUP_REGEX = re.compile(r"[1-9]\d+\.\d{4}")
 os.environ["TZ"] = "UTC"
+
+
+def parse_args():
+    """Return the cmdline arguments parsed (or fail)."""
+    parser = argparse.ArgumentParser(description="Purge old backups")
+    parser.add_argument(
+        "-v",
+        "--volume",
+        default=BACKUP_VOL,
+        help=f"Backup volume (default: {BACKUP_VOL})",
+    )
+    parser.add_argument("host", help="The backup host to purge")
+
+    return parser.parse_args()
 
 
 def get_all_backups(backup_dir):
@@ -193,8 +208,8 @@ def one_per_year(dt_list):
 
 
 def main():
-    hostname = sys.argv[1]
-    backup_dir = os.path.join("/var/backup", hostname)
+    args = parse_args()
+    backup_dir = os.path.join(args.volume, args.host)
 
     all_backups = get_all_backups(backup_dir)
     dt_list = backups_to_dt_list(all_backups)
