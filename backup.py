@@ -79,7 +79,7 @@ def parse_args():
         "-v",
         "--volume",
         default=BACKUP_VOL,
-        help=f"Backup volume (default: f{BACKUP_VOL})",
+        help=f"Backup volume (default: {BACKUP_VOL})",
     )
     parser.add_argument(
         "-r",
@@ -242,7 +242,6 @@ class BackupClient(object):
             shuffle(filesystems)
 
         with concurrent.futures.ThreadPoolExecutor(max_workers=jobs) as executor:
-            self.output.print("")
             for _dir in filesystems:
                 futures.append(
                     executor.submit(
@@ -343,8 +342,12 @@ def main():
     """Main program entry point."""
     args = parse_args()
     hosts = args.host
+    end = ""
 
     for hostname in hosts:
+        print("", end=end)
+        end = "\n"
+        print(hostname)
         try:
             client = BackupClient(hostname, args.volume)
             client.pre_backup()
