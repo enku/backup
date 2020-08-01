@@ -1,15 +1,13 @@
-#!/usr/bin/env python
-from __future__ import print_function
-
+#!/usr/bin/env python3
 import datetime
 import os
 import re
 import shutil
 import sys
 
-BACKUP_VOL = '/var/backup'
-BACKUP_REGEX = re.compile(r'[1-9]\d+\.\d{4}')
-os.environ['TZ'] = 'UTC'
+BACKUP_VOL = "/var/backup"
+BACKUP_REGEX = re.compile(r"[1-9]\d+\.\d{4}")
+os.environ["TZ"] = "UTC"
 
 
 def get_all_backups(backup_dir):
@@ -29,7 +27,7 @@ def backups_to_dt_list(backups):
     """
     dates = []
     for backup in backups:
-        backup_date = datetime.datetime.strptime(backup, '%Y%m%d.%H%M')
+        backup_date = datetime.datetime.strptime(backup, "%Y%m%d.%H%M")
         dates.append(backup_date)
     return dates
 
@@ -42,7 +40,7 @@ def dt_list_to_backups(dt_list):
     """
     backups = []
     for dt in dt_list:
-        backups.append(dt.strftime('%Y%m%d.%H%M'))
+        backups.append(dt.strftime("%Y%m%d.%H%M"))
     return backups
 
 
@@ -86,7 +84,8 @@ def last_day_of_month(dt):
         hour=23,
         minute=59,
         second=59,
-        microsecond=0)
+        microsecond=0,
+    )
     return next_month - datetime.timedelta(days=1)
 
 
@@ -110,8 +109,7 @@ def one_per_day_last_week(dt_list):
     lst = []
     today = datetime.datetime.now()
     last_week = today - datetime.timedelta(days=7)
-    last_week = last_week.replace(
-        hour=0, minute=0, second=0, microsecond=0)
+    last_week = last_week.replace(hour=0, minute=0, second=0, microsecond=0)
 
     for i in range(7):
         day = last_week + datetime.timedelta(days=i)
@@ -128,8 +126,7 @@ def one_per_week_last_month(dt_list):
     datetimes fit within the week, use the later.
     """
     lst = []
-    today = datetime.datetime.today().replace(
-        hour=0, minute=0, second=0, microsecond=0)
+    today = datetime.datetime.today().replace(hour=0, minute=0, second=0, microsecond=0)
     last_month = today - datetime.timedelta(days=31)
     start_of_month = last_month.replace(day=1)
     end_of_month = today.replace(day=1) - datetime.timedelta(days=1)
@@ -147,7 +144,7 @@ def one_per_week_last_month(dt_list):
             day=end_of_week.day,
             hour=23,
             minute=59,
-            second=59
+            second=59,
         )
         weeks_backups = filter_range(dt_list, start_day, end_of_week)
         append_latest(weeks_backups, lst)
@@ -169,8 +166,7 @@ def one_per_month_last_year(dt_list):
 
     dt = last_year
     while dt <= now:
-        start_of_month = dt.replace(
-            month=dt.month, day=1, hour=0, minute=0, second=0)
+        start_of_month = dt.replace(month=dt.month, day=1, hour=0, minute=0, second=0)
         end_of_month = last_day_of_month(start_of_month)
         months_dts = filter_range(dt_list, start_of_month, end_of_month)
         append_latest(months_dts, lst)
@@ -198,7 +194,7 @@ def one_per_year(dt_list):
 
 def main():
     hostname = sys.argv[1]
-    backup_dir = os.path.join('/var/backup', hostname)
+    backup_dir = os.path.join("/var/backup", hostname)
 
     all_backups = get_all_backups(backup_dir)
     dt_list = backups_to_dt_list(all_backups)
@@ -211,32 +207,34 @@ def main():
 
     to_remove = sorted(set(dt_list) - keep)
 
-    print('Want to remove {0} out of {1} backups'.format(
-        len(to_remove), len(all_backups)))
+    print(
+        "Want to remove {0} out of {1} backups".format(len(to_remove), len(all_backups))
+    )
 
     keep = list(keep)
     keep.sort()
-    print('Keeping: ')
+    print("Keeping: ")
     for backup in dt_list_to_backups(keep):
-        print('    {0}'.format(backup))
+        print("    {0}".format(backup))
 
     if to_remove:
-        ok = raw_input('\nOK? [y/N] ')
-        if ok.upper() == 'Y':
+        ok = raw_input("\nOK? [y/N] ")
+        if ok.upper() == "Y":
             remove_backups(backup_dir, dt_list_to_backups(to_remove))
         else:
-            print('Fair enough.')
+            print("Fair enough.")
     else:
-        print('Nothing to purge.')
+        print("Nothing to purge.")
 
 
 def remove_backups(backup_dir, to_remove):
     for backup in to_remove:
         dirname = os.path.join(backup_dir, backup)
-        print('Removing {}'.format(dirname), end=' ')
+        print("Removing {}".format(dirname), end=" ")
         sys.stdout.flush()
         shutil.rmtree(dirname)
-        print('done')
+        print("done")
 
-if __name__ == '__main__':
+
+if __name__ == "__main__":
     main()
