@@ -40,6 +40,7 @@ FAIL = "\U000026C5"
 RUNNING = "\U0001F317"
 COMPLETE = "\U0001F315"
 WAITING = "\U0001F311"
+SKIPPING = "\U0001F535"
 
 os.environ["TZ"] = "UTC"
 
@@ -99,6 +100,12 @@ def sprint(*args, **kwargs):
     sys.stdout.flush()
 
 
+def is_executable(path: str) -> bool:
+    realpath = os.path.realpath(path)
+
+    return os.path.isfile(path) and os.access(path, os.X_OK)
+
+
 class BackupClient(object):
     def __init__(self, hostname, volume):
         self.hostname = hostname
@@ -129,7 +136,24 @@ class BackupClient(object):
         status = call(new_cmd)
         return status
 
+    def run_hook(self, name: str, *args: str) -> int:
+        """Run the backup hook with given `name`, if available
+
+        Return the exit status or 0 if nothing ran
+        """
+        hook = os.path.realpath(name)
+
+        if is_executable(hook):
+            return call((hook,) + args)
+
+        return 0
+
     def pre_backup(self):
+        hook_status = self.run_hook("pre-host", self.hostname, self.volume)
+
+        if hook_status != 0:
+            return hook_status
+
         popen = Popen(
             ("ssh", self.hostname, "mktemp", "-d", "--suffix=.backup"), stdout=PIPE
         )
@@ -145,7 +169,18 @@ class BackupClient(object):
 
         return path.strip(), label.strip()
 
-    def backup_filesystem(self, filesystem, target, last_dir, update):
+    def backup_filesystem(self, filesystem: str, target: str, last_dir, update: bool):
+        hook_status = self.run_hook(
+            "pre-filesystem",
+            self.hostname,
+            self.volume,
+            filesystem,
+            ["no", "yes"][update],
+        )
+        if hook_status != 0:
+            self.print_stats((filesystem, SKIPPING))
+            sys.exit(hook_status)
+
         self.print_stats((filesystem, RUNNING))
         source, dirname = self.parse_path(filesystem)
         bind_mount = os.path.join(self.backup_vol, dirname)
@@ -182,6 +217,19 @@ class BackupClient(object):
         self.ssh(("rmdir", bind_mount))
 
         self.print_stats((filesystem, COMPLETE if status == 0 else FAIL))
+
+        if status == 0:
+            sys.exit(
+                self.run_hook(
+                    "post-filesystem",
+                    self.hostname,
+                    self.volume,
+                    filesystem,
+                    ["no", "yes"][update],
+                    target_path,
+                )
+            )
+
         sys.exit(status)
 
     def backup(self, update=False, link_to=None, jobs=3, random=False):
@@ -260,7 +308,14 @@ class BackupClient(object):
             self.output.print(f"{dirname}:{self.stats[filesystem]}", end=" ")
 
     def post_backup(self):
-        return self.ssh(("rmdir", self.backup_vol))
+        status = self.ssh(("rmdir", self.backup_vol))
+
+        hook_status = self.run_hook("post-host", self.hostname, self.volume)
+
+        if hook_status != 0:
+            return hook_status
+
+        return status
 
 
 def get_last_dir(dirname):
