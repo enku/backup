@@ -1,2 +1,5 @@
 .ropeproject/
+.venv/
 backup.py.egg-info/
+build/
+dist/
