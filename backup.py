@@ -366,18 +366,12 @@ def main():
         print("", end=end)
         end = "\n"
         print(hostname)
-        try:
-            client = BackupClient(hostname, args.volume)
-            client.pre_backup()
-            client.backup(
-                jobs=args.jobs,
-                link_to=args.link,
-                random=args.random,
-                update=args.update,
-            )
-            client.post_backup()
-        except Exception:
-            break
+        client = BackupClient(hostname, args.volume)
+        client.pre_backup()
+        client.backup(
+            jobs=args.jobs, link_to=args.link, random=args.random, update=args.update,
+        )
+        client.post_backup()
 
     print("done")
 
