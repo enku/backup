@@ -13,4 +13,4 @@ In addition to the `backup` tool there is a `purgebackups` tool that removes
 old backups using an algorithm I borrowed from somewhere but was so long ago
 that I can't remember.
 
-![demo][assets/demo.png]
+![demo](assets/demo.png)
