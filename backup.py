@@ -21,6 +21,7 @@ RSYNC_ARGS = (
     "--archive",
     "--compress",
     "--human-readable",
+    "--inplace",
     "--numeric-ids",
     "--one-file-system",
     "--quiet",
