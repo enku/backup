@@ -227,15 +227,13 @@ def main():
 
     to_remove = sorted(set(dt_list) - keep)
 
-    print(
-        "Want to remove {0} out of {1} backups".format(len(to_remove), len(all_backups))
-    )
+    print(f"Want to remove {len(to_remove)} out of {len(all_backups)} backups")
 
     keep = list(keep)
     keep.sort()
     print("Keeping: ")
     for backup in dt_list_to_backups(keep):
-        print("    {0}".format(backup))
+        print(f"    {backup}")
 
     if to_remove:
         confirm_removal = input("\nOK? [y/N] ")
@@ -251,7 +249,7 @@ def remove_backups(backup_dir, to_remove):
     """Remove to_remove directories from backup_dir"""
     for backup in to_remove:
         dirname = os.path.join(backup_dir, backup)
-        print("Removing {}".format(dirname), end=" ")
+        print(f"Removing {dirname}", end=" ")
         sys.stdout.flush()
         shutil.rmtree(dirname)
         print("done")
