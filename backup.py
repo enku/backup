@@ -7,9 +7,10 @@ import argparse
 import concurrent.futures
 import datetime
 import os
-import queue
 import sys
 import threading
+import typing as t
+from queue import Queue
 from random import shuffle
 from subprocess import PIPE, Popen, call
 from typing import Tuple
@@ -44,25 +45,28 @@ WAITING = "\U000026AB"
 
 os.environ["TZ"] = "UTC"
 
+ARGS = t.Tuple[t.Any, ...]
+KWARGS = t.Dict[str, t.Any]
+
 
 class OutputThread(threading.Thread):
     """Thread responsible for Output from backup threads"""
 
-    queue = queue.Queue()
+    queue: Queue[t.Tuple[ARGS, KWARGS]] = Queue()
     daemon = True
 
-    def run(self):
+    def run(self) -> None:
         while True:
             args, kwargs = self.queue.get()
             sprint(*args, **kwargs)
             self.queue.task_done()
 
-    def print(self, *args, **kwargs):
+    def print(self, *args: t.Any, **kwargs: t.Any) -> None:
         """Schedule content to be printed"""
         self.queue.put((args, kwargs))
 
 
-def parse_args():
+def parse_args() -> argparse.Namespace:
     """Return the command line arguments parsed (or fail)."""
     parser = argparse.ArgumentParser(description="Back up a system")
     parser.add_argument(
@@ -95,7 +99,7 @@ def parse_args():
     return parser.parse_args()
 
 
-def sprint(*args, **kwargs):
+def sprint(*args: t.Any, **kwargs: t.Any) -> None:
     """
     Print and flush standard out.
     """
@@ -106,16 +110,17 @@ def sprint(*args, **kwargs):
 def is_executable(path: str) -> bool:
     """Return True if `path` exists and is executable"""
     realpath = os.path.realpath(path)
+
     return os.path.isfile(realpath) and os.access(realpath, os.X_OK)
 
 
 class BackupClient:
     """Backup client for a host/volume pair"""
 
-    def __init__(self, hostname, volume):
+    def __init__(self, hostname: str, volume: str) -> None:
         self.hostname = hostname
         self.volume = os.path.realpath(volume)
-        self.backup_vol = None
+        self.backup_vol: t.Optional[str] = None
         self.host_dir = f"{volume}/{hostname}"
         self.filesystems = self.get_filesystems()
         self.stats = {i: WAITING for i in self.filesystems}
@@ -125,7 +130,7 @@ class BackupClient:
         if not os.path.isdir(self.host_dir):
             os.mkdir(self.host_dir)
 
-    def get_filesystems(self):
+    def get_filesystems(self) -> t.List[str]:
         """Return the list of host's filesystems to back up"""
         filesystems = []
         filename = f"{self.host_dir}/filesystems"
@@ -137,7 +142,7 @@ class BackupClient:
                 filesystems.append(line)
         return filesystems
 
-    def ssh(self, args):
+    def ssh(self, args: t.Iterable[str]) -> int:
         """Like subprocess.Popen: Execute args but using ssh on the client."""
         new_args = ["ssh", self.hostname, " ".join(args)]
         status = call(new_args)
@@ -155,7 +160,7 @@ class BackupClient:
 
         return 0
 
-    def pre_backup(self):
+    def pre_backup(self) -> int:
         """To be run before .backup()"""
         hook_status = self.run_hook("pre-host", self.hostname, self.volume)
 
@@ -177,7 +182,9 @@ class BackupClient:
 
         return path.strip(), label.strip()
 
-    def backup_filesystem(self, filesystem: str, target: str, last_dir, update: bool):
+    def backup_filesystem(
+        self, filesystem: str, target: str, last_dir, update: bool
+    ) -> None:
         """Back up the specified filesystem to target
 
         If last_dir is not None, use it as a --link-dest argument to rsync.
@@ -197,6 +204,7 @@ class BackupClient:
 
         self.print_stats((filesystem, RUNNING))
         source, dirname = self.parse_path(filesystem)
+        assert self.backup_vol is not None
         bind_mount = os.path.join(self.backup_vol, dirname)
 
         self.ssh(("mkdir", "-p", bind_mount))
@@ -246,7 +254,9 @@ class BackupClient:
 
         sys.exit(status)
 
-    def backup(self, update=False, link_to=None, jobs=3, random=False):
+    def backup(
+        self, update=False, link_to: t.Optional[str] = None, jobs=3, random=False
+    ) -> None:
         """Back up the filesystems"""
         last_dir = get_last_dir(self.host_dir)
         target = self.get_target(update, last_dir)
@@ -282,7 +292,7 @@ class BackupClient:
             os.unlink(latest_link)
         os.symlink(timestamp, latest_link)
 
-    def get_target(self, update, last_dir):
+    def get_target(self, update: bool, last_dir: t.Optional[str]) -> str:
         """
         Return (and create if necessary) the rsync target based on the
         options. exit() and print message to standard error if there are issues.
@@ -310,7 +320,7 @@ class BackupClient:
 
         return target
 
-    def print_stats(self, update=None):
+    def print_stats(self, update=None) -> None:
         """Prints the current status of the backup"""
         filesystems = self.filesystems[:]
         filesystems.sort(key=lambda i: self.parse_path(i)[1])
@@ -322,8 +332,9 @@ class BackupClient:
             dirname = self.parse_path(filesystem)[1]
             self.output.print(f"{dirname}:{self.stats[filesystem]}", end=" ")
 
-    def post_backup(self):
+    def post_backup(self) -> int:
         """To be run after .backup()"""
+        assert self.backup_vol
         status = self.ssh(("rmdir", self.backup_vol))
 
         hook_status = self.run_hook("post-host", self.hostname, self.volume)
@@ -334,7 +345,7 @@ class BackupClient:
         return status
 
 
-def get_last_dir(dir_name):
+def get_last_dir(dir_name: str) -> t.Optional[str]:
     """Return the last (sorted) directory in dir_name"""
     dirs = []
     for _dir in os.listdir(dir_name):
@@ -349,14 +360,14 @@ def get_last_dir(dir_name):
     return dirs[-1]
 
 
-def get_timestamp(time=None):
+def get_timestamp(time: t.Optional[datetime.datetime] = None) -> str:
     """Return the timestamp (directory name) for the given time"""
     if not time:
         time = datetime.datetime.now()
     return time.strftime("%Y%m%d.%H%M")
 
 
-def main():
+def main() -> None:
     """Main program entry point."""
     args = parse_args()
     hosts = args.host

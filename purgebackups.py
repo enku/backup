@@ -6,13 +6,14 @@ import os
 import re
 import shutil
 import sys
+import typing as t
 
 BACKUP_VOL = "/var/backup"
 BACKUP_REGEX = re.compile(r"[1-9]\d+\.\d{4}")
 os.environ["TZ"] = "UTC"
 
 
-def parse_args():
+def parse_args() -> argparse.Namespace:
     """Return the command line arguments parsed (or fail)."""
     parser = argparse.ArgumentParser(description="Purge old backups")
     parser.add_argument(
@@ -26,7 +27,7 @@ def parse_args():
     return parser.parse_args()
 
 
-def get_all_backups(backup_dir):
+def get_all_backups(backup_dir: str) -> t.List[str]:
     """Return a list of all backup directories in backup_dir."""
     backups = []
     filenames = os.listdir(backup_dir)
@@ -36,7 +37,7 @@ def get_all_backups(backup_dir):
     return backups
 
 
-def backups_to_dt_list(backups):
+def backups_to_dt_list(backups: t.List[str]) -> t.List[datetime.datetime]:
     """
     Given a list of strings in backup format, return the corresponding
     list of datetime objects.
