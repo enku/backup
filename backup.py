@@ -96,6 +96,7 @@ def parse_args() -> argparse.Namespace:
         help="Backup host's filesystems in random order",
     )
     parser.add_argument("host", type=str, nargs="+")
+
     return parser.parse_args()
 
 
@@ -140,12 +141,14 @@ class BackupClient:
                 if not line or line.startswith("#"):
                     continue
                 filesystems.append(line)
+
         return filesystems
 
     def ssh(self, args: t.Iterable[str]) -> int:
         """Like subprocess.Popen: Execute args but using ssh on the client."""
         new_args = ["ssh", self.hostname, " ".join(args)]
         status = call(new_args)
+
         return status
 
     def run_hook(self, name: str, *args: str) -> int:
@@ -380,7 +383,10 @@ def main() -> None:
         client = BackupClient(hostname, args.volume)
         client.pre_backup()
         client.backup(
-            jobs=args.jobs, link_to=args.link, random=args.random, update=args.update,
+            jobs=args.jobs,
+            link_to=args.link,
+            random=args.random,
+            update=args.update,
         )
         client.post_backup()
 
