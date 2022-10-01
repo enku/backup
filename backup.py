@@ -135,7 +135,7 @@ class BackupClient:
         """Return the list of host's filesystems to back up"""
         filesystems = []
         filename = f"{self.host_dir}/filesystems"
-        with open(filename) as fs_file:
+        with open(filename, encoding="UTF-8") as fs_file:
             for line in fs_file:
                 line = line.strip()
                 if not line or line.startswith("#"):
@@ -170,10 +170,12 @@ class BackupClient:
         if hook_status != 0:
             return hook_status
 
-        popen = Popen(
+        with Popen(
             ("ssh", self.hostname, "mktemp", "-d", "--suffix=.backup"), stdout=PIPE
-        )
-        self.backup_vol = popen.stdout.read().rstrip().decode("utf-8")
+        ) as popen:
+            assert popen.stdout is not None
+            self.backup_vol = popen.stdout.read().rstrip().decode("utf-8")
+
         return popen.wait()
 
     @staticmethod
