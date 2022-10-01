@@ -14,7 +14,6 @@ from random import shuffle
 from subprocess import PIPE, Popen, call
 from typing import Tuple
 
-ENV = {"TZ": "UTC"}
 BACKUP_VOL = "/var/backup"
 RSYNC_ARGS = (
     "--acls",
