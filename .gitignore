@@ -1,5 +1,7 @@
 .ropeproject/
 .venv/
+/.pdm.toml
+/__pypackages__/
 backup.py.egg-info/
 build/
 dist/

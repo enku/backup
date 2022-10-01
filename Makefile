@@ -1,8 +1,5 @@
-export $(CURDIR)/.venv/bin:$(PATH)
-
-appname := $(shell python3 setup.py --name)
-appversion := $(shell python3 setup.py --version)
-venv := .venv/.dirstate
+appname := $(shell pdm show --name)
+appversion := $(shell pdm show --version)
 sources := backup.py purgebackups.py
 
 .PHONY: build
@@ -21,13 +18,8 @@ dist/$(appname)-$(appversion).tar.gz: setup.py $(sources)
 	python3 $< sdist
 
 .PHONY: lint
-lint: $(venv)
-	pylint --rcfile=.pylintrc $(sources)
-
-$(venv): dev_requirements.txt
-	python3 -m venv .venv
-	pip3 install -r $<
-	touch $@
+lint:
+	pylint $(sources)
 
 clean:
-	rm -rf .venv dist build 
+	rm -rf .venv dist build __pypackages__
