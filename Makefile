@@ -19,6 +19,7 @@ dist/$(appname)-$(appversion).tar.gz: setup.py $(sources)
 
 .PHONY: lint
 lint:
+	mypy $(sources)
 	pylint $(sources)
 
 clean:
