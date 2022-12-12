@@ -24,6 +24,13 @@ def parse_args() -> argparse.Namespace:
         default=BACKUP_VOL,
         help=f"Backup volume (default: {BACKUP_VOL})",
     )
+    parser.add_argument(
+        "-y",
+        "--yes",
+        help='Assume "yes" to prompts',
+        action="store_true",
+        default=False,
+    )
     parser.add_argument("host", help="The backup host to purge")
 
     return parser.parse_args()
@@ -232,7 +239,7 @@ def main() -> None:
     print_list(keep_lst, to_remove)
 
     if to_remove:
-        confirm_removal = input("\nOK? [y/N] ")
+        confirm_removal = "Y" if args.yes else input("\nOK? [y/N] ")
         if confirm_removal.upper() == "Y":
             remove_backups(backup_dir, dt_list_to_backups(to_remove))
         else:
