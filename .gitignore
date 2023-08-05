@@ -1,5 +1,6 @@
 .ropeproject/
 .venv/
+/.pdm-python
 /.pdm.toml
 /__pypackages__/
 backup.py.egg-info/
