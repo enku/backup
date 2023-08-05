@@ -15,7 +15,7 @@ from random import shuffle
 from subprocess import PIPE, Popen, call
 from typing import Tuple
 
-BACKUP_VOL = "/var/backup"
+BACKUP_VOL = os.environ.get("BACKUP_VOL", "/var/backup")
 RSYNC_ARGS = (
     "--acls",
     "--archive",
