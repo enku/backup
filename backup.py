@@ -385,10 +385,7 @@ def main() -> None:
         client = BackupClient(hostname, args.volume)
         client.pre_backup()
         client.backup(
-            jobs=args.jobs,
-            link_to=args.link,
-            random=args.random,
-            update=args.update,
+            jobs=args.jobs, link_to=args.link, random=args.random, update=args.update
         )
         client.post_backup()
 
