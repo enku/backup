@@ -1,3 +1,4 @@
+.envrc
 .ropeproject/
 .venv/
 /.pdm-python
