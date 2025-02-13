@@ -9,11 +9,10 @@ import datetime
 import os
 import sys
 import threading
-import typing as t
 from queue import Queue
 from random import shuffle
 from subprocess import PIPE, Popen, call
-from typing import Tuple
+from typing import Any, Iterable, TypeAlias
 
 BACKUP_VOL = os.environ.get("BACKUP_VOL", "/var/backup")
 RSYNC_ARGS = (
@@ -45,14 +44,14 @@ WAITING = "\U000026AB"
 
 os.environ["TZ"] = "UTC"
 
-ARGS = t.Tuple[t.Any, ...]
-KWARGS = t.Dict[str, t.Any]
+ARGS: TypeAlias = tuple[Any, ...]  # pylint: disable=invalid-name
+KWARGS: TypeAlias = dict[str, Any]  # pylint: disable=invalid-name
 
 
 class OutputThread(threading.Thread):
     """Thread responsible for Output from backup threads"""
 
-    queue: Queue[t.Tuple[ARGS, KWARGS]] = Queue()
+    queue: Queue[tuple[ARGS, KWARGS]] = Queue()
     daemon = True
 
     def run(self) -> None:
@@ -61,7 +60,7 @@ class OutputThread(threading.Thread):
             sprint(*args, **kwargs)
             self.queue.task_done()
 
-    def print(self, *args: t.Any, **kwargs: t.Any) -> None:
+    def print(self, *args: Any, **kwargs: Any) -> None:
         """Schedule content to be printed"""
         self.queue.put((args, kwargs))
 
@@ -100,7 +99,7 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
-def sprint(*args: t.Any, **kwargs: t.Any) -> None:
+def sprint(*args: Any, **kwargs: Any) -> None:
     """
     Print and flush standard out.
     """
@@ -121,7 +120,7 @@ class BackupClient:
     def __init__(self, hostname: str, volume: str) -> None:
         self.hostname = hostname
         self.volume = os.path.realpath(volume)
-        self.backup_vol: t.Optional[str] = None
+        self.backup_vol: str | None = None
         self.host_dir = f"{volume}/{hostname}"
         self.filesystems = self.get_filesystems()
         self.stats = {i: WAITING for i in self.filesystems}
@@ -131,7 +130,7 @@ class BackupClient:
         if not os.path.isdir(self.host_dir):
             os.mkdir(self.host_dir)
 
-    def get_filesystems(self) -> t.List[str]:
+    def get_filesystems(self) -> list[str]:
         """Return the list of host's filesystems to back up"""
         filesystems = []
         filename = f"{self.host_dir}/filesystems"
@@ -144,7 +143,7 @@ class BackupClient:
 
         return filesystems
 
-    def ssh(self, args: t.Iterable[str]) -> int:
+    def ssh(self, args: Iterable[str]) -> int:
         """Like subprocess.Popen: Execute args but using ssh on the client."""
         new_args = ["ssh", self.hostname, " ".join(args)]
         status = call(new_args)
@@ -179,7 +178,7 @@ class BackupClient:
         return popen.wait()
 
     @staticmethod
-    def parse_path(filesystem: str) -> Tuple[str, str]:
+    def parse_path(filesystem: str) -> tuple[str, str]:
         """Given the `filesystem` entry return the path and backup "label"""
         parts = filesystem.partition(":")
         path = parts[0]
@@ -260,7 +259,7 @@ class BackupClient:
         sys.exit(status)
 
     def backup(
-        self, update=False, link_to: t.Optional[str] = None, jobs=3, random=False
+        self, update=False, link_to: str | None = None, jobs=3, random=False
     ) -> None:
         """Back up the filesystems"""
         last_dir = get_last_dir(self.host_dir)
@@ -297,7 +296,7 @@ class BackupClient:
             os.unlink(latest_link)
         os.symlink(timestamp, latest_link)
 
-    def get_target(self, update: bool, last_dir: t.Optional[str]) -> str:
+    def get_target(self, update: bool, last_dir: str | None) -> str:
         """
         Return (and create if necessary) the rsync target based on the
         options. exit() and print message to standard error if there are issues.
@@ -350,7 +349,7 @@ class BackupClient:
         return status
 
 
-def get_last_dir(dir_name: str) -> t.Optional[str]:
+def get_last_dir(dir_name: str) -> str | None:
     """Return the last (sorted) directory in dir_name"""
     dirs = []
     for _dir in os.listdir(dir_name):
@@ -365,7 +364,7 @@ def get_last_dir(dir_name: str) -> t.Optional[str]:
     return dirs[-1]
 
 
-def get_timestamp(time: t.Optional[datetime.datetime] = None) -> str:
+def get_timestamp(time: datetime.datetime | None = None) -> str:
     """Return the timestamp (directory name) for the given time"""
     if not time:
         time = datetime.datetime.now()
