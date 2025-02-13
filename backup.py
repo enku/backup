@@ -145,10 +145,7 @@ class BackupClient:
 
     def ssh(self, args: Iterable[str]) -> int:
         """Like subprocess.Popen: Execute args but using ssh on the client."""
-        new_args = ["ssh", self.hostname, " ".join(args)]
-        status = call(new_args)
-
-        return status
+        return call(["ssh", self.hostname, *args])
 
     def run_hook(self, name: str, *args: str) -> int:
         """Run the backup hook with given `name`, if available
