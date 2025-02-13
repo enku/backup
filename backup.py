@@ -230,19 +230,19 @@ class BackupClient:
 
         self.print_stats((filesystem, COMPLETE if status == 0 else FAIL))
 
-        if status == 0:
-            sys.exit(
-                self.run_hook(
-                    "post-filesystem",
-                    self.hostname,
-                    self.volume,
-                    filesystem,
-                    ["no", "yes"][update],
-                    target_path,
-                )
-            )
+        if status != 0:
+            sys.exit(status)
 
-        sys.exit(status)
+        sys.exit(
+            self.run_hook(
+                "post-filesystem",
+                self.hostname,
+                self.volume,
+                filesystem,
+                ["no", "yes"][update],
+                target_path,
+            )
+        )
 
     def backup(
         self, update=False, link_to: str | None = None, jobs=3, random=False
