@@ -7,6 +7,7 @@ import argparse
 import concurrent.futures
 import datetime
 import os
+import os.path as ospath
 import sys
 import threading
 from queue import Queue
@@ -109,9 +110,9 @@ def sprint(*args: Any, **kwargs: Any) -> None:
 
 def is_executable(path: str) -> bool:
     """Return True if `path` exists and is executable"""
-    realpath = os.path.realpath(path)
+    realpath = ospath.realpath(path)
 
-    return os.path.isfile(realpath) and os.access(realpath, os.X_OK)
+    return ospath.isfile(realpath) and os.access(realpath, os.X_OK)
 
 
 class BackupClient:
@@ -119,7 +120,7 @@ class BackupClient:
 
     def __init__(self, hostname: str, volume: str) -> None:
         self.hostname = hostname
-        self.volume = os.path.realpath(volume)
+        self.volume = ospath.realpath(volume)
         self.backup_vol: str | None = None
         self.host_dir = f"{volume}/{hostname}"
         self.filesystems = self.get_filesystems()
@@ -127,7 +128,7 @@ class BackupClient:
         self.output = OutputThread()
         self.output.start()
 
-        if not os.path.isdir(self.host_dir):
+        if not ospath.isdir(self.host_dir):
             os.mkdir(self.host_dir)
 
     def get_filesystems(self) -> list[str]:
@@ -152,7 +153,7 @@ class BackupClient:
 
         Return the exit status or 0 if nothing ran
         """
-        hook = os.path.join(self.volume, name)
+        hook = ospath.join(self.volume, name)
 
         if is_executable(hook):
             return call((hook,) + args)
@@ -179,7 +180,7 @@ class BackupClient:
         """Given the `filesystem` entry return the path and backup "label"""
         parts = filesystem.partition(":")
         path = parts[0]
-        label = os.path.basename(parts[2] if parts[2] else path) or "root"
+        label = ospath.basename(parts[2] if parts[2] else path) or "root"
 
         return path.strip(), label.strip()
 
@@ -206,14 +207,14 @@ class BackupClient:
         self.print_stats((filesystem, RUNNING))
         source, dirname = self.parse_path(filesystem)
         assert self.backup_vol is not None
-        bind_mount = os.path.join(self.backup_vol, dirname)
+        bind_mount = ospath.join(self.backup_vol, dirname)
 
         self.ssh(("mkdir", "-p", bind_mount))
         status = self.ssh(("mount", "--bind", source, bind_mount))
         if status != 0:
             sys.exit(status)
 
-        target_path = os.path.join(self.volume, self.hostname, target, dirname)
+        target_path = ospath.join(self.volume, self.hostname, target, dirname)
 
         if not target_path.startswith(self.volume):
             sys.stderr.write(
@@ -277,7 +278,7 @@ class BackupClient:
 
         latest_link = f"{self.volume}/{self.hostname}/latest"
 
-        if os.path.exists(latest_link) or os.path.islink(latest_link):
+        if ospath.exists(latest_link) or ospath.islink(latest_link):
             os.unlink(latest_link)
         os.symlink(timestamp, latest_link)
 
@@ -302,7 +303,7 @@ class BackupClient:
         else:
             target = "0"
             full_target = f"{self.volume}/{self.hostname}/{target}"
-            if os.path.isdir(full_target):
+            if ospath.isdir(full_target):
                 sys.stderr.write(f"{target} already exists. Abort.\n")
                 sys.exit(1)
             os.mkdir(full_target)
@@ -345,7 +346,7 @@ class BackupClient:
         args = ["rsync", *RSYNC_ARGS]
 
         if last_dir:
-            link_dest_path = os.path.join(self.volume, self.hostname, last_dir, dirname)
+            link_dest_path = ospath.join(self.volume, self.hostname, last_dir, dirname)
             args.append(f"--link-dest={link_dest_path}")
 
         if update:
@@ -361,7 +362,7 @@ def get_last_dir(dir_name: str) -> str | None:
     dirs = []
     for _dir in os.listdir(dir_name):
         fullpath = f"{dir_name}/{_dir}"
-        if (not os.path.isdir(fullpath)) or os.path.islink(fullpath):
+        if (not ospath.isdir(fullpath)) or ospath.islink(fullpath):
             continue
         dirs.append(_dir)
 
