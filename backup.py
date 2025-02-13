@@ -222,19 +222,7 @@ class BackupClient:
             self.ssh(("rmdir", bind_mount))
             sys.exit(1)
 
-        if last_dir:
-            link_dest_path = os.path.join(self.volume, self.hostname, last_dir, dirname)
-
-        args = ["rsync"]
-        args.extend(RSYNC_ARGS)
-        if update:
-            args.append("--del")
-        if last_dir:
-            args.append(f"--link-dest={link_dest_path}")
-
-        args.append("--")
-        args.append(f"{self.hostname}:{bind_mount}/")
-        args.append(f"{target_path}/")
+        args = self.build_args(update, last_dir, dirname, bind_mount, target_path)
         status = call(args)
         self.ssh(("umount", bind_mount))
         self.ssh(("rmdir", bind_mount))
@@ -344,6 +332,28 @@ class BackupClient:
             return hook_status
 
         return status
+
+    def build_args(  # pylint: disable=too-many-arguments,too-many-positional-arguments
+        self,
+        update: bool,
+        last_dir: str | None,
+        dirname: str,
+        bind_mount: str,
+        target_path: str,
+    ) -> list[str]:
+        """Return the command line args to back up a filesystem"""
+        args = ["rsync", *RSYNC_ARGS]
+
+        if last_dir:
+            link_dest_path = os.path.join(self.volume, self.hostname, last_dir, dirname)
+            args.append(f"--link-dest={link_dest_path}")
+
+        if update:
+            args.append("--del")
+
+        args.extend(["--", f"{self.hostname}:{bind_mount}/", f"{target_path}/"])
+
+        return args
 
 
 def get_last_dir(dir_name: str) -> str | None:
