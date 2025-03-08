@@ -34,11 +34,11 @@ RSYNC_STATUS = {
     24: "Partial transfer due to vanished source files",
 }
 
-COMPLETE = "\U000026AA"
-FAIL = "\U0001F534"
-RUNNING = "\U0001F536"
-SKIPPING = "\U0001F535"
-WAITING = "\U000026AB"
+COMPLETE = "\U000026aa"
+FAIL = "\U0001f534"
+RUNNING = "\U0001f536"
+SKIPPING = "\U0001f535"
+WAITING = "\U000026ab"
 
 os.environ["TZ"] = "UTC"
 
