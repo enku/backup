@@ -1,7 +1,5 @@
 #!/usr/bin/env python3
-"""
-Backups, revisited
-"""
+"""Backups, revisited"""
 import argparse
 import concurrent.futures
 import datetime
