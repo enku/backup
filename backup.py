@@ -33,6 +33,7 @@ RSYNC_STATUS = {
     23: "Partial transfer due to error",
     24: "Partial transfer due to vanished source files",
 }
+USER = os.getlogin()
 
 COMPLETE = "\U000026aa"
 FAIL = "\U0001f534"
@@ -92,6 +93,9 @@ def parse_args() -> argparse.Namespace:
         default=False,
         help="Backup host's filesystems in random order",
     )
+    parser.add_argument(
+        "-u", "--user", default=USER, help="specify the remote user to log into"
+    )
     parser.add_argument("host", type=str, nargs="+")
 
     return parser.parse_args()
@@ -115,8 +119,8 @@ def is_executable(path: str) -> bool:
 class BackupClient:
     """Backup client for a host/volume pair"""
 
-    def __init__(self, hostname: str, volume: str) -> None:
-        self.hostname = hostname
+    def __init__(self, hostname: str, volume: str, user: str = USER) -> None:
+        self.hostname = f"{user}@{hostname}"
         self.volume = ospath.realpath(volume)
         self.backup_vol: str | None = None
         self.host_dir = f"{volume}/{hostname}"
@@ -386,7 +390,7 @@ def main() -> None:
         print("", end=end)
         end = "\n"
         print(hostname)
-        client = BackupClient(hostname, args.volume)
+        client = BackupClient(hostname, args.volume, user=args.user)
         client.pre_backup()
         client.backup(
             jobs=args.jobs, link_to=args.link, random=args.random, update=args.update
