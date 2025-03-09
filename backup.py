@@ -94,7 +94,7 @@ def parse_args() -> argparse.Namespace:
         help="Backup host's filesystems in random order",
     )
     parser.add_argument(
-        "-u", "--user", default=USER, help="specify the remote user to log into"
+        "--user", default=USER, help="specify the remote user to log into"
     )
     parser.add_argument("host", type=str, nargs="+")
 
