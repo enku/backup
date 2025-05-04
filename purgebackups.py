@@ -252,7 +252,7 @@ def remove_backups(backup_dir: str, to_remove: List[str]) -> None:
     """Remove to_remove directories from backup_dir"""
     for backup in to_remove:
         dirname = os.path.join(backup_dir, backup)
-        print(f"Removing {dirname}", end=" ")
+        print(f"Removing {backup}", end=" ")
         sys.stdout.flush()
         shutil.rmtree(dirname)
         print("done")
