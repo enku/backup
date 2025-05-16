@@ -15,8 +15,8 @@ os.environ["TZ"] = "UTC"
 DTList = List[dt.datetime]
 
 
-def parse_args() -> argparse.Namespace:
-    """Return the command line arguments parsed (or fail)."""
+def build_parser() -> argparse.ArgumentParser:
+    """Return the ArgumentParser for the program entry point"""
     parser = argparse.ArgumentParser(description="Purge old backups")
     parser.add_argument(
         "-v",
@@ -33,7 +33,7 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument("host", help="The backup host to purge")
 
-    return parser.parse_args()
+    return parser
 
 
 def get_all_backups(backup_dir: str) -> List[str]:
@@ -218,7 +218,7 @@ def one_per_year(dt_list: DTList) -> DTList:
 
 def main() -> None:
     """Main program entry point"""
-    args = parse_args()
+    args = build_parser().parse_args()
     backup_dir = os.path.join(args.volume, args.host)
 
     all_backups = get_all_backups(backup_dir)

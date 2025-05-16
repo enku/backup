@@ -64,8 +64,8 @@ class OutputThread(threading.Thread):
         self.queue.put((args, kwargs))
 
 
-def parse_args() -> argparse.Namespace:
-    """Return the command line arguments parsed (or fail)."""
+def build_parser() -> argparse.ArgumentParser:
+    """Return the ArgumentParser for the program entry point"""
     parser = argparse.ArgumentParser(description="Back up a system")
     parser.add_argument(
         "-u",
@@ -98,7 +98,7 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument("host", type=str, nargs="+")
 
-    return parser.parse_args()
+    return parser
 
 
 def sprint(*args: Any, **kwargs: Any) -> None:
@@ -382,7 +382,7 @@ def get_timestamp(time: datetime.datetime | None = None) -> str:
 
 def main() -> None:
     """Main program entry point."""
-    args = parse_args()
+    args = build_parser().parse_args()
     hosts = args.host
     end = ""
 
