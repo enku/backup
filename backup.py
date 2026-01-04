@@ -28,11 +28,6 @@ RSYNC_ARGS = (
     "-F",
 )
 
-RSYNC_STATUS = {
-    0: "Success",
-    23: "Partial transfer due to error",
-    24: "Partial transfer due to vanished source files",
-}
 USER = os.getlogin()
 
 COMPLETE = "\U000026aa"
